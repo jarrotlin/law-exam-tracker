@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>法考学习追踪器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; }
+        .container { display: flex; min-height: 100vh; }
+        
+        /* 左侧导航 */
+        .sidebar { width: 240px; background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 20px; position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar h1 { font-size: 1.2rem; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #4a90d9; }
+        .subject-list { list-style: none; }
+        .subject-item { padding: 12px 15px; cursor: pointer; border-radius: 8px; margin-bottom: 5px; transition: all 0.3s; display: flex; justify-content: space-between; align-items: center; }
+        .subject-item:hover { background: rgba(74, 144, 217, 0.2); }
+        .subject-item.active { background: #4a90d9; }
+        .subject-item .stats { font-size: 0.75rem; opacity: 0.8; }
+        
+        /* 右侧内容 */
+        .main-content { flex: 1; margin-left: 240px; padding: 25px; }
+        
+        /* 左右布局 - 始终保持 */
+        .phases-container { display: flex; gap: 20px; }
+        .phase-column { flex: 1; min-width: 0; }
+        /* 锁定左右结构，不做响应式切换 */
+        
+        /* 科目头部 */
+        .subject-header { background: white; padding: 20px 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .subject-header h2 { color: #1a1a2e; font-size: 1.5rem; margin-bottom: 5px; }
+        .subject-header .subtitle { color: #666; font-size: 0.9rem; }
+        
+        /* 阶段区块 */
+        .phase-section { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .phase-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; }
+        .phase-title { font-size: 1.1rem; color: #1a1a2e; font-weight: 600; }
+        .phase-meta { color: #888; font-size: 0.85rem; }
+        
+        /* 状态徽章 */
+        .phase-status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .phase-status-badge.complete {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .phase-status-badge.updating {
+            background: #fff3e0;
+            color: #e65100;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* 空列表占位符 */
+        .empty-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: #999;
+            text-align: center;
+        }
+        .placeholder-icon { font-size: 3rem; margin-bottom: 10px; }
+        .empty-placeholder p { font-size: 0.9rem; }
+        
+        /* 顶部统计 */
+        .phase-stats { 
+            background: #f0f7ff; padding: 10px 15px; border-radius: 8px; margin-bottom: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .phase-stats .checked-count { font-size: 0.9rem; color: #333; }
+        .phase-stats .checked-count span { color: #4a90d9; font-weight: 600; }
+        .check-all-btn { 
+            background: none; border: 1px solid #4a90d9; color: #4a90d9;
+            padding: 5px 12px; border-radius: 15px; font-size: 0.75rem; cursor: pointer;
+        }
+        .check-all-btn:hover { background: #4a90d9; color: white; }
+        
+        /* 视频列表 */
+        .video-list { display: flex; flex-direction: column; gap: 6px; }
+        .video-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #eee; border-radius: 6px; transition: all 0.2s; }
+        .video-item:hover { border-color: #4a90d9; background: #f8f9fa; }
+        .video-item.checked { background: #e8f5e9; border-color: #81c784; }
+        
+        .video-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: #4caf50; }
+        
+        .video-num { 
+            background: #e8e8e8; color: #666; padding: 3px 8px; border-radius: 10px; 
+            font-size: 0.7rem; font-weight: 600; min-width: 40px; text-align: center;
+        }
+        .video-item.checked .video-num { background: #4caf50; color: white; }
+        
+        .video-title { 
+            flex: 1; font-size: 0.85rem; color: #333; cursor: pointer; 
+            text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .video-title:hover { color: #4a90d9; }
+        
+        /* 欢迎页 */
+        .welcome { text-align: center; padding: 80px 20px; color: #888; }
+        .welcome h2 { font-size: 1.5rem; margin-bottom: 10px; }
+        
+        @media (max-width: 1024px) {
+            .sidebar { width: 100%; position: relative; height: auto; }
+            .main-content { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="sidebar">
+            <h1>📚 法考学习追踪</h1>
+            <ul class="subject-list" id="subjectList"></ul>
+        </nav>
+        <main class="main-content" id="mainContent">
+            <div class="welcome">
+                <h2>👈 请选择左侧科目</h2>
+                <p>记录每次学习进度</p>
+            </div>
+        </main>
+    </div>
+
+    <script src="data.js"></script>
+    <script>
+        // 检查登录状态
+        if (!document.cookie.includes('lawtracker_auth=ok')) {
+            window.location.href = 'login.html';
+        }
+        
+        const STORAGE_KEY = 'lawExamProgress';
+        let currentSubject = null;
+        
+        function getProgress() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : {};
+        }
+        
+        function saveProgress(data) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+        
+        function renderSidebar() {
+            const list = document.getElementById('subjectList');
+            list.innerHTML = '';
+            
+            for (const [subjKey, subjData] of Object.entries(courseData)) {
+                const progress = getProgress();
+                const subjProg = progress[subjKey] || {};
+                
+                // 正确计算已勾选数和总数（每个phase的idx独立）
+                let checkedCount = 0;
+                let totalCount = 0;
+                for (const [phaseName, phase] of Object.entries(subjData.phases)) {
+                    const phaseProg = subjProg[phaseName] || {};
+                    for (const ep of phase.episodes) {
+                        totalCount++;
+                        if (phaseProg[ep.idx]) checkedCount++;
+                    }
+                }
+                
+                const li = document.createElement('li');
+                li.className = 'subject-item' + (currentSubject === subjKey ? ' active' : '');
+                li.innerHTML = `<span>${subjKey}</span><span class="stats">${checkedCount}/${totalCount}</span>`;
+                li.onclick = () => selectSubject(subjKey);
+                list.appendChild(li);
+            }
+        }
+        
+        function selectSubject(subjKey) {
+            currentSubject = subjKey;
+            renderSidebar();
+            renderSubject(subjKey);
+        }
+        
+        function renderSubject(subjKey) {
+            const subjData = courseData[subjKey];
+            const progress = getProgress();
+            const subjProg = progress[subjKey] || {};
+            const mainContent = document.getElementById('mainContent');
+            
+            let totalEpisodes = 0;
+            for (const phase of Object.values(subjData.phases)) {
+                totalEpisodes += phase.episodes.length;
+            }
+            
+            let html = `
+                <div class="subject-header">
+                    <h2>${subjKey}</h2>
+                    <p class="subtitle">共 ${totalEpisodes} 集</p>
+                </div>
+            `;
+            
+            const phaseKeys = Object.keys(subjData.phases);
+            const phaseA = phaseKeys[0] ? subjData.phases[phaseKeys[0]] : null;
+            const phaseB = phaseKeys[1] ? subjData.phases[phaseKeys[1]] : null;
+            
+            html += `<div class="phases-container">`;
+            
+            // 左列
+            if (phaseA) {
+                const phaseNameA = phaseKeys[0];
+                let checkedA = 0;
+                phaseA.episodes.forEach(ep => { if (subjProg[phaseNameA]?.[ep.idx]) checkedA++; });
+                const totalA = phaseA.episodes.length;
+                const teacherA = phaseA.teacher;
+                const statusBadgeA = (teacherA === '已完结' || teacherA === '更新中') ? `<span class="phase-status-badge ${teacherA === '已完结' ? 'complete' : 'updating'}">${teacherA}</span>` : `<span class="phase-meta"> · ${teacherA}</span>`;
+                
+                html += `
+                    <div class="phase-column">
+                        <div class="phase-section">
+                            <div class="phase-header">
+                                <div>
+                                    <span class="phase-title">${phaseNameA}</span>
+                                    ${statusBadgeA}
+                                </div>
+                                <span class="phase-meta">${phaseA.episodes.length}集</span>
+                            </div>
+                            <div class="phase-stats">
+                                <span class="checked-count">已勾选 <span id="countA">${checkedA}</span>/${totalA}</span>
+                                <button class="check-all-btn" onclick="toggleAll('${subjKey}', '${phaseNameA}', ${totalA})">全选/取消</button>
+                            </div>
+                            <div class="video-list">
+                `;
+phaseA.episodes.forEach(ep => {
+                    const isChecked = subjProg[phaseNameA]?.[ep.idx] === true;
+                    html += `
+                        <div class="video-item ${isChecked ? 'checked' : ''}" data-phase="${phaseNameA}" data-idx="${ep.idx}">
+                            <input type="checkbox" class="video-checkbox" ${isChecked ? 'checked' : ''} 
+                                onchange="toggleCheck('${subjKey}', '${phaseNameA}', ${ep.idx}, this.checked)">
+                            <span class="video-num">${ep.idx}</span>
+                            <a href="${ep.link}" target="_blank" class="video-title">${ep.title}</a>
+                        </div>
+                    `;
+                });
+                html += `</div></div></div>`;
+            }
+            
+            // 右列
+            if (phaseB) {
+                const phaseNameB = phaseKeys[1];
+                const teacherB = phaseB.teacher;
+                const statusBadgeB = (teacherB === '已完结' || teacherB === '更新中') ? `<span class="phase-status-badge ${teacherB === '已完结' ? 'complete' : 'updating'}">${teacherB}</span>` : `<span class="phase-meta"> · ${teacherB}</span>`;
+                const totalB = phaseB.episodes.length;
+                
+                // 空列表占位
+                if (totalB === 0) {
+                    html += `
+                        <div class="phase-column">
+                            <div class="phase-section">
+                                <div class="phase-header">
+                                    <div>
+                                        <span class="phase-title">${phaseNameB}</span>
+                                        ${statusBadgeB}
+                                    </div>
+                                    <span class="phase-meta">0集</span>
+                                </div>
+                                <div class="empty-placeholder">
+                                    <span class="placeholder-icon">📚</span>
+                                    <p>即将更新...</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    let checkedB = 0;
+                    phaseB.episodes.forEach(ep => { if (subjProg[phaseNameB]?.[ep.idx]) checkedB++; });
+                    
+                    html += `
+                        <div class="phase-column">
+                            <div class="phase-section">
+                                <div class="phase-header">
+                                    <div>
+                                        <span class="phase-title">${phaseNameB}</span>
+                                        ${statusBadgeB}
+                                    </div>
+                                    <span class="phase-meta">${totalB}集</span>
+                                </div>
+                                <div class="phase-stats">
+                                    <span class="checked-count">已勾选 <span id="countB">${checkedB}</span>/${totalB}</span>
+                                    <button class="check-all-btn" onclick="toggleAll('${subjKey}', '${phaseNameB}', ${totalB})">全选/取消</button>
+                                </div>
+                                <div class="video-list">
+                    `;
+                    phaseB.episodes.forEach(ep => {
+                        const isChecked = subjProg[phaseNameB]?.[ep.idx] === true;
+                        html += `
+                            <div class="video-item ${isChecked ? 'checked' : ''}" data-phase="${phaseNameB}" data-idx="${ep.idx}">
+                                <input type="checkbox" class="video-checkbox" ${isChecked ? 'checked' : ''} 
+                                    onchange="toggleCheck('${subjKey}', '${phaseNameB}', ${ep.idx}, this.checked)">
+                                <span class="video-num">${ep.idx}</span>
+                                <a href="${ep.link}" target="_blank" class="video-title">${ep.title}</a>
+                            </div>
+                        `;
+                    });
+                    html += `</div></div></div>`;
+                }
+            }
+            
+            html += `</div>`;
+            mainContent.innerHTML = html;
+        }
+        
+        function toggleCheck(subject, phaseName, idx, checked) {
+            const progress = getProgress();
+            if (!progress[subject]) progress[subject] = {};
+            if (!progress[subject][phaseName]) progress[subject][phaseName] = {};
+            
+            if (checked) {
+                progress[subject][phaseName][idx] = true;
+            } else {
+                delete progress[subject][phaseName][idx];
+            }
+            
+            saveProgress(progress);
+            renderSidebar();
+            
+            // 更新UI
+            const item = document.querySelector(`.video-item[data-phase="${phaseName}"][data-idx="${idx}"]`);
+            if (item) {
+                item.classList.toggle('checked', checked);
+            }
+            
+            // 更新计数
+            updateCounts(subject);
+        }
+        
+        function toggleAll(subject, phaseName, total) {
+            const progress = getProgress();
+            if (!progress[subject]) progress[subject] = {};
+            if (!progress[subject][phaseName]) progress[subject][phaseName] = {};
+            
+            // 检查是否全选
+            let allChecked = true;
+            for (let i = 1; i <= total; i++) {
+                if (!progress[subject][phaseName][i]) {
+                    allChecked = false;
+                    break;
+                }
+            }
+            
+            // 切换
+            for (let i = 1; i <= total; i++) {
+                if (allChecked) {
+                    delete progress[subject][phaseName][i];
+                } else {
+                    progress[subject][phaseName][i] = true;
+                }
+            }
+            
+            saveProgress(progress);
+            renderSidebar();
+            renderSubject(subject);
+        }
+        
+        function updateCounts(subject) {
+            const subjData = courseData[subject];
+            const progress = getProgress();
+            const subjProg = progress[subject] || {};
+            
+            let countA = 0, countB = 0;
+            const phaseEntries = Object.entries(subjData.phases);
+            if (phaseEntries[0]) {
+                const [phaseNameA, phaseA] = phaseEntries[0];
+                phaseA.episodes.forEach(ep => { if (subjProg[phaseNameA]?.[ep.idx]) countA++; });
+            }
+            if (phaseEntries[1]) {
+                const [phaseNameB, phaseB] = phaseEntries[1];
+                phaseB.episodes.forEach(ep => { if (subjProg[phaseNameB]?.[ep.idx]) countB++; });
+            }
+            
+            const countAEl = document.getElementById('countA');
+            const countBEl = document.getElementById('countB');
+            if (countAEl) countAEl.textContent = countA;
+            if (countBEl) countBEl.textContent = countB;
+        }
+        
+        // 初始化
+        renderSidebar();
+    </script>
+</body>
+</html>
